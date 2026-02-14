@@ -34,6 +34,9 @@ end
 function M.execute_async(prompt, callback, opts)
   opts = opts or {}
 
+  local stdout_data = {}
+  local stderr_data = {}
+
   vim.fn.jobstart(
     string.format("%s -p '%s'", config.options.claude_cmd, prompt:gsub("'", "'\\'''")),
     {
@@ -41,23 +44,35 @@ function M.execute_async(prompt, callback, opts)
       stderr_buffered = true,
       on_stdout = function(_, data)
         if data then
-          local output = table.concat(data, "\n")
-          if callback then
-            callback(output, nil)
+          for _, line in ipairs(data) do
+            if line ~= "" then
+              table.insert(stdout_data, line)
+            end
           end
         end
       end,
       on_stderr = function(_, data)
-        if data and #data > 0 then
-          local error = table.concat(data, "\n")
-          if callback then
-            callback(nil, error)
+        if data then
+          for _, line in ipairs(data) do
+            if line ~= "" then
+              table.insert(stderr_data, line)
+            end
           end
         end
       end,
       on_exit = function(_, exit_code)
-        if exit_code ~= 0 and callback then
-          callback(nil, "Claude command exited with code " .. exit_code)
+        if not callback then
+          return
+        end
+
+        if exit_code ~= 0 then
+          local error_msg = #stderr_data > 0
+            and table.concat(stderr_data, "\n")
+            or ("Claude command exited with code " .. exit_code)
+          callback(nil, error_msg)
+        else
+          local output = table.concat(stdout_data, "\n")
+          callback(output, nil)
         end
       end,
     }
