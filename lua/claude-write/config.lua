@@ -2,9 +2,6 @@
 local M = {}
 
 M.defaults = {
-  -- Claude CLI command
-  claude_cmd = "claude",
-
   -- Directory for cloned repos and cache
   cache_dir = vim.fn.stdpath("cache") .. "/claude-write",
 

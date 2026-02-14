@@ -1,6 +1,18 @@
--- Claude CLI interaction module
+-- Claude API interaction module using credentials hijacking
 local M = {}
 local config = require("claude-write.config")
+
+-- Paths
+local CREDENTIALS_PATH = vim.fn.expand("~/.claude/.credentials.json")
+local CONFIG_PATH = vim.fn.expand("~/.claude.json")
+local API_URL = "https://api.anthropic.com/v1/messages"
+local REFRESH_URL = "https://api.anthropic.com/v1/oauth/token"
+
+-- Cached credentials
+local cached_credentials = nil
+local cached_access_token = nil
+local cached_refresh_token = nil
+local cached_expires_at = nil
 
 -- Debug logging
 local function debug_log(msg)
@@ -12,55 +24,161 @@ local function debug_log(msg)
   end
 end
 
--- Execute claude command and parse JSON output
-function M.execute(prompt, opts)
-  opts = opts or {}
-  local timeout = opts.timeout or config.options.session.timeout
+-- Load credentials from ~/.claude/.credentials.json
+local function load_credentials()
+  debug_log("Loading credentials from " .. CREDENTIALS_PATH)
 
-  -- Build command
-  local cmd = string.format(
-    "%s -p '%s' 2>&1",
-    config.options.claude_cmd,
-    prompt:gsub("'", "'\\''")  -- Escape single quotes
-  )
-
-  -- Execute command
-  local handle = io.popen(cmd)
-  if not handle then
-    return nil, "Failed to execute claude command"
+  local file = io.open(CREDENTIALS_PATH, "r")
+  if not file then
+    return nil, "Claude Code credentials not found at " .. CREDENTIALS_PATH
   end
 
-  local output = handle:read("*a")
-  local success, exit_type, code = handle:close()
+  local content = file:read("*a")
+  file:close()
 
-  if not success then
-    return nil, "Claude command failed: " .. (output or "unknown error")
+  local ok, data = pcall(vim.json.decode, content)
+  if not ok then
+    return nil, "Failed to parse credentials file: " .. tostring(data)
   end
 
-  return output, nil
+  local oauth_data = data.claudeAiOauth
+  if not oauth_data then
+    return nil, "No claudeAiOauth data found in credentials"
+  end
+
+  cached_credentials = data
+  cached_access_token = oauth_data.accessToken
+  cached_refresh_token = oauth_data.refreshToken
+  cached_expires_at = oauth_data.expiresAt
+
+  if not cached_access_token or not cached_refresh_token or not cached_expires_at then
+    return nil, "Incomplete OAuth credentials"
+  end
+
+  debug_log("Credentials loaded successfully")
+  return true
 end
 
--- Execute claude command asynchronously with callback
-function M.execute_async(prompt, callback, opts)
-  opts = opts or {}
+-- Check if token is expired
+local function is_token_expired()
+  if not cached_expires_at then
+    return true
+  end
 
+  local current_time = os.time()
+  local buffer_seconds = 300 -- 5 minutes
+  return current_time >= (cached_expires_at - buffer_seconds)
+end
+
+-- Refresh access token
+local function refresh_access_token()
+  debug_log("Refreshing access token...")
+
+  if not cached_refresh_token then
+    return nil, "No refresh token available"
+  end
+
+  local json_data = vim.json.encode({
+    grant_type = "refresh_token",
+    refresh_token = cached_refresh_token
+  })
+
+  local curl_cmd = string.format(
+    "curl -s -X POST '%s' -H 'Content-Type: application/json' -d '%s'",
+    REFRESH_URL,
+    json_data:gsub("'", "'\\''")
+  )
+
+  local handle = io.popen(curl_cmd)
+  if not handle then
+    return nil, "Failed to execute curl command"
+  end
+
+  local response = handle:read("*a")
+  handle:close()
+
+  local ok, data = pcall(vim.json.decode, response)
+  if not ok then
+    return nil, "Failed to parse refresh response: " .. tostring(data)
+  end
+
+  if not data.access_token or not data.expires_in then
+    return nil, "Invalid refresh response: " .. vim.inspect(data)
+  end
+
+  -- Update cached tokens
+  cached_access_token = data.access_token
+  cached_expires_at = os.time() + data.expires_in
+
+  -- Update credentials file
+  if cached_credentials and cached_credentials.claudeAiOauth then
+    cached_credentials.claudeAiOauth.accessToken = cached_access_token
+    cached_credentials.claudeAiOauth.expiresAt = cached_expires_at
+
+    local file = io.open(CREDENTIALS_PATH, "w")
+    if file then
+      file:write(vim.json.encode(cached_credentials))
+      file:close()
+      debug_log("Updated credentials file")
+    else
+      debug_log("Warning: Failed to update credentials file")
+    end
+  end
+
+  debug_log("Access token refreshed successfully")
+  return true
+end
+
+-- Get valid access token
+local function get_access_token()
+  if not cached_credentials then
+    local ok, err = load_credentials()
+    if not ok then
+      return nil, err
+    end
+  end
+
+  if is_token_expired() then
+    local ok, err = refresh_access_token()
+    if not ok then
+      return nil, err
+    end
+  end
+
+  return cached_access_token
+end
+
+-- Make API call to Claude
+local function call_claude_api(messages, callback)
+  local access_token, err = get_access_token()
+  if not access_token then
+    callback(nil, err)
+    return
+  end
+
+  local request_body = vim.json.encode({
+    model = "claude-sonnet-4-5-20250929",
+    max_tokens = 4096,
+    messages = messages
+  })
+
+  debug_log("Making API call to Claude...")
+
+  local curl_cmd = string.format(
+    "curl -s -X POST '%s' -H 'Authorization: Bearer %s' -H 'Content-Type: application/json' -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: oauth-2025-04-20' -d '%s'",
+    API_URL,
+    access_token,
+    request_body:gsub("'", "'\\''")
+  )
+
+  -- Run curl asynchronously
   local stdout_data = {}
   local stderr_data = {}
 
-  -- Build command - use array form for better escaping
-  local cmd = { config.options.claude_cmd, "-p", prompt }
-  debug_log("Starting command: " .. table.concat(cmd, " "))
-
-  -- Get current environment and remove CLAUDECODE to allow nested sessions
-  local env = vim.fn.environ()
-  env.CLAUDECODE = vim.NIL
-
-  local job_id = vim.fn.jobstart(cmd, {
-    env = env,
+  local job_id = vim.fn.jobstart(curl_cmd, {
     stdout_buffered = true,
     stderr_buffered = true,
     on_stdout = function(_, data)
-      debug_log("stdout received: " .. vim.inspect(data))
       if data then
         for _, line in ipairs(data) do
           if line ~= "" then
@@ -70,7 +188,6 @@ function M.execute_async(prompt, callback, opts)
       end
     end,
     on_stderr = function(_, data)
-      debug_log("stderr received: " .. vim.inspect(data))
       if data then
         for _, line in ipairs(data) do
           if line ~= "" then
@@ -80,30 +197,55 @@ function M.execute_async(prompt, callback, opts)
       end
     end,
     on_exit = function(_, exit_code)
-      debug_log("Command exited with code: " .. exit_code)
-      debug_log("stdout_data: " .. vim.inspect(stdout_data))
-      debug_log("stderr_data: " .. vim.inspect(stderr_data))
-
-      if not callback then
-        debug_log("ERROR: No callback provided!")
-        return
-      end
+      debug_log("API call exited with code: " .. exit_code)
 
       if exit_code ~= 0 then
         local error_msg = #stderr_data > 0
           and table.concat(stderr_data, "\n")
-          or ("Claude command exited with code " .. exit_code)
-        debug_log("Calling callback with error: " .. error_msg)
+          or "API call failed with code " .. exit_code
         callback(nil, error_msg)
+        return
+      end
+
+      local response = table.concat(stdout_data, "\n")
+      debug_log("API response received, length: " .. #response)
+
+      local ok, data = pcall(vim.json.decode, response)
+      if not ok then
+        callback(nil, "Failed to parse API response: " .. tostring(data))
+        return
+      end
+
+      if data.error then
+        callback(nil, "API error: " .. vim.inspect(data.error))
+        return
+      end
+
+      -- Extract text from response
+      if data.content and #data.content > 0 then
+        local text = data.content[1].text
+        callback(text, nil)
       else
-        local output = table.concat(stdout_data, "\n")
-        debug_log("Calling callback with output length: " .. #output)
-        callback(output, nil)
+        callback(nil, "No content in API response")
       end
     end,
   })
 
-  debug_log("Job started with ID: " .. tostring(job_id))
+  debug_log("API job started with ID: " .. tostring(job_id))
+end
+
+-- Execute prompt asynchronously with callback
+function M.execute_async(prompt, callback, opts)
+  opts = opts or {}
+
+  local messages = {
+    {
+      role = "user",
+      content = prompt
+    }
+  }
+
+  call_claude_api(messages, callback)
 end
 
 -- Check current line for grammar/spelling
