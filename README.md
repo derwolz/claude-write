@@ -139,11 +139,12 @@ or
    - `- original line` (in red)
    - `+ suggested line` (in green)
 4. In the diff window:
-   - `dd` on the `-` line: **Accept** the change (keep the `+` line)
-   - `dd` on the `+` line: **Reject** the change (keep the original)
+   - `A`: **Accept** the change as-is
+   - `C`: **Cancel** - reject the change, keep original
+   - `c`: **Change** - edit the suggestion before accepting (then press `A`)
    - `a`: Accept all changes
-   - `r`: Reject all changes
    - `q`: Close diff window
+   - `dd` (old method): Delete line to accept the other
 
 **Example:**
 ```diff
