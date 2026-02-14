@@ -5,6 +5,7 @@ local config = require("claude-write.config")
 local claude = require("claude-write.claude")
 local memory = require("claude-write.memory")
 local ui = require("claude-write.ui")
+local diff_ui = require("claude-write.diff_ui")
 
 -- Setup function
 function M.setup(opts)
@@ -39,7 +40,7 @@ function M.setup(opts)
       vim.keymap.set("n", config.options.keymaps.line_edit, M.line_edit, {
         noremap = true,
         silent = true,
-        desc = "Claude: Edit last 10 lines"
+        desc = "Claude: Edit current line with diff view"
       })
     end
 
@@ -115,24 +116,15 @@ function M.copy_check()
   end)
 end
 
--- Edit last N lines
-function M.line_edit(n)
-  n = n or 10
+-- Edit current line with diff view
+function M.line_edit()
   local bufnr = vim.api.nvim_get_current_buf()
-  local current_line = vim.api.nvim_win_get_cursor(0)[1]
+  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
 
-  local start_line = math.max(0, current_line - n)
-  local lines = vim.api.nvim_buf_get_lines(bufnr, start_line, current_line, false)
+  vim.notify("Analyzing line " .. line_nr .. "...", vim.log.levels.INFO)
+  local loading_buf, loading_win = ui.show_loading("Claude is analyzing...")
 
-  if #lines == 0 then
-    vim.notify("No lines to edit", vim.log.levels.WARN)
-    return
-  end
-
-  vim.notify("Starting line edit...", vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Editing lines...")
-
-  claude.edit_lines(lines, function(result, err)
+  claude.edit_current_line(bufnr, line_nr, function(result, err)
     -- Safely close the loading window
     pcall(function()
       if vim.api.nvim_win_is_valid(loading_win) then
@@ -142,7 +134,6 @@ function M.line_edit(n)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
-      -- Also write to log file for debugging
       local log_file = vim.fn.stdpath("cache") .. "/claude-write-debug.log"
       vim.notify("Check log file: " .. log_file, vim.log.levels.INFO)
       return
@@ -153,7 +144,17 @@ function M.line_edit(n)
       return
     end
 
-    ui.show_result("Line Edit - Last " .. #lines .. " lines", result)
+    -- Parse the JSON response
+    local edit_data, parse_err = diff_ui.parse_edit_response(result)
+    if parse_err then
+      vim.notify("Failed to parse response: " .. parse_err, vim.log.levels.ERROR)
+      -- Show raw response for debugging
+      ui.show_result("Raw Response (Debug)", result)
+      return
+    end
+
+    -- Display the diff
+    diff_ui.display_diff(bufnr, edit_data)
   end)
 end
 

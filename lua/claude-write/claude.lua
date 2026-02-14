@@ -248,6 +248,61 @@ function M.execute_async(prompt, callback, opts)
   call_claude_api(messages, callback)
 end
 
+-- Line editor system prompt
+local LINE_EDITOR_PROMPT = [[You are a line editor reviewing a document for stylistic improvements.
+
+Your role:
+- Review the current line for word choice, sentence length, flow, and redundancy
+- Provide ONE concrete suggestion per line, or respond with no changes if the line is excellent
+- Focus on clarity, conciseness, and impact
+- Suggest alternatives that maintain the author's voice
+- Be specific and actionable
+
+The context will be provided with line numbers in the format: [Line N] text
+The line number N is the actual 0-indexed line number in the document.
+
+You MUST respond with valid JSON in the following format:
+{
+  "explanation": "Brief explanation of your reasoning (1-2 sentences)",
+  "edit": [
+    {"line": N, "text": "suggested replacement text"}
+  ]
+}
+
+IMPORTANT: Use the EXACT line number from the [Line N] prefix in your JSON response.
+- If suggesting a change: Include the line number (from [Line N]) and new text in the "edit" array
+- If the line is good as-is: Return an empty "edit" array: []
+- The "line" field MUST match the line number from the [Line N] prefix
+- The "explanation" should always be present, even if the edit array is empty
+
+Always respond with ONLY the JSON object, no additional text.]]
+
+-- Edit current line with line editor mode
+function M.edit_current_line(bufnr, line_nr, callback)
+  -- Get the current line (line_nr is 1-indexed from Neovim)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)
+  if #lines == 0 then
+    callback(nil, "No line at position " .. line_nr)
+    return
+  end
+
+  local line_content = lines[1]
+  local zero_indexed_line = line_nr - 1
+
+  -- Build the prompt with system prompt and user message
+  local user_prompt = string.format("[Line %d] %s", zero_indexed_line, line_content)
+
+  -- Create messages with system prompt
+  local messages = {
+    {
+      role = "user",
+      content = LINE_EDITOR_PROMPT .. "\n\nNow review this line:\n" .. user_prompt
+    }
+  }
+
+  call_claude_api(messages, callback)
+end
+
 -- Check current line for grammar/spelling
 function M.check_line(line_content, callback)
   local prompt = string.format(

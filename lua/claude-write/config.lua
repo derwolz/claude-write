@@ -15,7 +15,7 @@ M.defaults = {
   keymaps = {
     reader = "<leader>cr",        -- Load into memory
     copy_check = "<leader>cc",    -- Check current line
-    line_edit = "<leader>cl",     -- Edit last 10 lines
+    line_edit = "<leader>cl",     -- Edit current line with diff view
     git_browse = "<leader>cg",    -- Browse git repo
     clear_memory = "<leader>cR",  -- Clear memory (capital R)
   },

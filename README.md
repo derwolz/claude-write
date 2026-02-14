@@ -1,12 +1,12 @@
 # claude-write
 
-A Neovim plugin that integrates Claude Code CLI for intelligent code editing and analysis.
+A Neovim plugin that uses Claude's API directly for intelligent code editing and analysis with git-style diff interface.
 
 ## Features
 
 - **Reader Mode** (`<leader>cr`): Load current buffer into persistent memory
 - **Copy Check** (`<leader>cc`): Check current line for grammar/spelling/clarity
-- **Line Edit** (`<leader>cl`): Edit and improve last 10 lines
+- **Line Edit** (`<leader>cl`): Edit current line with interactive diff view
 - **Git Browse** (`<leader>cg`): Browse and load files from git repositories
 - **Clear Memory** (`<leader>cR`): Clear all stored context
 
@@ -53,16 +53,14 @@ use {
 ## Requirements
 
 - Neovim >= 0.8.0
-- [Claude Code CLI](https://github.com/anthropics/claude-code) installed and configured
+- [Claude Code CLI](https://github.com/anthropics/claude-code) installed and authenticated (credentials at `~/.claude/.credentials.json`)
+- `curl` command available
 - Git (for repository cloning)
 
 ## Configuration
 
 ```lua
 require("claude-write").setup({
-  -- Claude CLI command (default: "claude")
-  claude_cmd = "claude",
-
   -- Cache directory (default: vim cache dir)
   cache_dir = vim.fn.stdpath("cache") .. "/claude-write",
 
@@ -120,9 +118,9 @@ or
 :ClaudeCopyCheck
 ```
 
-### Line Edit
+### Line Edit with Diff View
 
-Edit the last 10 lines:
+Edit the current line with an interactive git-style diff view:
 
 ```
 <leader>cl
@@ -133,6 +131,30 @@ or
 ```
 :ClaudeLineEdit
 ```
+
+**How it works:**
+1. Place cursor on the line you want to edit
+2. Press `<leader>cl` to trigger analysis
+3. A diff window opens on the right showing:
+   - `- original line` (in red)
+   - `+ suggested line` (in green)
+4. In the diff window:
+   - `dd` on the `-` line: **Accept** the change (keep the `+` line)
+   - `dd` on the `+` line: **Reject** the change (keep the original)
+   - `a`: Accept all changes
+   - `r`: Reject all changes
+   - `q`: Close diff window
+
+**Example:**
+```diff
+# Word choice improvement recommended
+
+@@ Line 42 @@
+- This function should be ran every time
++ This function should be run every time
+```
+
+Delete the `-` line to accept Claude's suggestion, or delete the `+` line to keep your original.
 
 ### Git Repository Browser
 
@@ -166,12 +188,13 @@ or
 
 ## Architecture
 
-The plugin calls `claude -p` commands in ephemeral terminal sessions and parses the stdout. This allows for:
+The plugin uses OAuth credentials from `~/.claude/.credentials.json` to make direct API calls to Claude's API. This allows for:
 
-- Orchestrating multiple Claude sessions
-- Using Claude's Task tool for sub-agent delegation
+- Direct authentication without CLI overhead
+- Automatic token refresh when expired
+- Streaming responses for real-time feedback
+- Interactive diff-based editing workflow
 - Maintaining persistent context across operations
-- Pipeline-based workflows (15-20+ concurrent operations)
 
 ## Memory System
 
