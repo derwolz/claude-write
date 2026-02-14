@@ -19,26 +19,44 @@ function M.setup(opts)
 
   -- Set up keymaps if enabled
   if config.options.keymaps then
-    local opts_map = { noremap = true, silent = true }
-
     if config.options.keymaps.reader then
-      vim.keymap.set("n", config.options.keymaps.reader, M.reader, opts_map)
+      vim.keymap.set("n", config.options.keymaps.reader, M.reader, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Load current buffer into memory"
+      })
     end
 
     if config.options.keymaps.copy_check then
-      vim.keymap.set("n", config.options.keymaps.copy_check, M.copy_check, opts_map)
+      vim.keymap.set("n", config.options.keymaps.copy_check, M.copy_check, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Check current line for issues"
+      })
     end
 
     if config.options.keymaps.line_edit then
-      vim.keymap.set("n", config.options.keymaps.line_edit, M.line_edit, opts_map)
+      vim.keymap.set("n", config.options.keymaps.line_edit, M.line_edit, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Edit last 10 lines"
+      })
     end
 
     if config.options.keymaps.git_browse then
-      vim.keymap.set("n", config.options.keymaps.git_browse, M.git_browse, opts_map)
+      vim.keymap.set("n", config.options.keymaps.git_browse, M.git_browse, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Browse and clone git repository"
+      })
     end
 
     if config.options.keymaps.clear_memory then
-      vim.keymap.set("n", config.options.keymaps.clear_memory, M.clear_memory, opts_map)
+      vim.keymap.set("n", config.options.keymaps.clear_memory, M.clear_memory, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Clear all memory"
+      })
     end
   end
 end
