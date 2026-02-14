@@ -37,7 +37,8 @@ function M.show_diff_window()
   -- Set window options
   vim.api.nvim_win_set_option(M.diff_winnr, "number", false)
   vim.api.nvim_win_set_option(M.diff_winnr, "relativenumber", false)
-  vim.api.nvim_win_set_option(M.diff_winnr, "wrap", false)
+  vim.api.nvim_win_set_option(M.diff_winnr, "wrap", true)
+  vim.api.nvim_win_set_option(M.diff_winnr, "linebreak", true)
 
   -- Set up keybindings for accepting/rejecting changes
   M.setup_diff_keybindings()
