@@ -48,14 +48,11 @@ end
 function M.setup_diff_keybindings()
   local opts = { noremap = true, silent = true, buffer = M.diff_bufnr }
 
+  -- Only override specific keys, let everything else work normally
+
   -- A to Accept current change (apply the + line)
   vim.keymap.set("n", "A", function()
     M.accept_current_change()
-  end, opts)
-
-  -- a to accept all changes
-  vim.keymap.set("n", "a", function()
-    M.accept_all_changes()
   end, opts)
 
   -- C to Cancel/reject current change (keep original)
@@ -63,12 +60,7 @@ function M.setup_diff_keybindings()
     M.reject_current_change()
   end, opts)
 
-  -- c to Change - edit the suggestion before accepting
-  vim.keymap.set("n", "c", function()
-    M.edit_suggestion()
-  end, opts)
-
-  -- dd to delete current line (old behavior - accept the other)
+  -- dd to delete current line (accept the other)
   vim.keymap.set("n", "dd", function()
     M.delete_line_and_apply()
   end, opts)

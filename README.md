@@ -138,13 +138,14 @@ or
 3. A diff window opens on the right showing:
    - `- original line` (in red)
    - `+ suggested line` (in green)
-4. In the diff window:
-   - `A`: **Accept** the change as-is
-   - `C`: **Cancel** - reject the change, keep original
-   - `c`: **Change** - edit the suggestion before accepting (then press `A`)
-   - `a`: Accept all changes
+4. **Edit normally** with all Neovim commands (`c`, `d`, `i`, etc.) to modify the `+` line
+5. Special commands:
+   - `A`: **Accept** - apply the current `+` line to your file
+   - `C`: **Cancel** - reject the change, keep original `-` line
+   - `dd`: Delete current line (accepts the other)
    - `q`: Close diff window
-   - `dd` (old method): Delete line to accept the other
+
+You can use normal Vim editing (`ciw`, `cw`, `A`, `I`, etc.) to modify Claude's suggestion, then press capital `A` to accept it.
 
 **Example:**
 ```diff
