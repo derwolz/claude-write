@@ -303,6 +303,35 @@ function M.edit_current_line(bufnr, line_nr, callback)
   call_claude_api(messages, callback)
 end
 
+-- Edit multiple lines with line editor mode
+function M.edit_multiple_lines(bufnr, start_line, end_line, callback)
+  -- Get the lines (line numbers are 1-indexed from Neovim)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+  if #lines == 0 then
+    callback(nil, "No lines in range " .. start_line .. "-" .. end_line)
+    return
+  end
+
+  -- Build prompt with all lines
+  local line_prompts = {}
+  for i, line_content in ipairs(lines) do
+    local zero_indexed_line = start_line - 1 + (i - 1)
+    table.insert(line_prompts, string.format("[Line %d] %s", zero_indexed_line, line_content))
+  end
+
+  local user_prompt = table.concat(line_prompts, "\n")
+
+  -- Create messages with system prompt
+  local messages = {
+    {
+      role = "user",
+      content = LINE_EDITOR_PROMPT .. "\n\nNow review these lines:\n" .. user_prompt
+    }
+  }
+
+  call_claude_api(messages, callback)
+end
+
 -- Check current line for grammar/spelling
 function M.check_line(line_content, callback)
   local prompt = string.format(

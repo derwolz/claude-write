@@ -14,7 +14,7 @@ function M.setup(opts)
   -- Create user commands
   vim.api.nvim_create_user_command("ClaudeReader", M.reader, {})
   vim.api.nvim_create_user_command("ClaudeCopyCheck", M.copy_check, {})
-  vim.api.nvim_create_user_command("ClaudeLineEdit", M.line_edit, {})
+  vim.api.nvim_create_user_command("ClaudeLineEdit", M.line_edit, { range = true })
   vim.api.nvim_create_user_command("ClaudeGitBrowse", M.git_browse, {})
   vim.api.nvim_create_user_command("ClaudeClearMemory", M.clear_memory, {})
 
@@ -37,10 +37,19 @@ function M.setup(opts)
     end
 
     if config.options.keymaps.line_edit then
+      -- Normal mode: edit current line
       vim.keymap.set("n", config.options.keymaps.line_edit, M.line_edit, {
         noremap = true,
         silent = true,
         desc = "Claude: Edit current line with diff view"
+      })
+      -- Visual mode: edit selected lines
+      vim.keymap.set("v", config.options.keymaps.line_edit, function()
+        M.line_edit_visual()
+      end, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Edit selected lines with diff view"
       })
     end
 
@@ -125,6 +134,55 @@ function M.line_edit()
   local loading_buf, loading_win = ui.show_loading("Claude is analyzing...")
 
   claude.edit_current_line(bufnr, line_nr, function(result, err)
+    -- Safely close the loading window
+    pcall(function()
+      if vim.api.nvim_win_is_valid(loading_win) then
+        vim.api.nvim_win_close(loading_win, true)
+      end
+    end)
+
+    if err then
+      vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
+      local log_file = vim.fn.stdpath("cache") .. "/claude-write-debug.log"
+      vim.notify("Check log file: " .. log_file, vim.log.levels.INFO)
+      return
+    end
+
+    if not result or result == "" then
+      vim.notify("No result received from Claude", vim.log.levels.WARN)
+      return
+    end
+
+    -- Parse the JSON response
+    local edit_data, parse_err = diff_ui.parse_edit_response(result)
+    if parse_err then
+      vim.notify("Failed to parse response: " .. parse_err, vim.log.levels.ERROR)
+      -- Show raw response for debugging
+      ui.show_result("Raw Response (Debug)", result)
+      return
+    end
+
+    -- Display the diff
+    diff_ui.display_diff(bufnr, edit_data)
+  end)
+end
+
+-- Edit multiple selected lines with diff view
+function M.line_edit_visual()
+  local bufnr = vim.api.nvim_get_current_buf()
+
+  -- Get visual selection range
+  local start_line = vim.fn.line("'<")
+  local end_line = vim.fn.line("'>")
+
+  -- Exit visual mode
+  vim.cmd("normal! \\<Esc>")
+
+  local line_count = end_line - start_line + 1
+  vim.notify(string.format("Analyzing %d lines (%d-%d)...", line_count, start_line, end_line), vim.log.levels.INFO)
+  local loading_buf, loading_win = ui.show_loading("Claude is analyzing " .. line_count .. " lines...")
+
+  claude.edit_multiple_lines(bufnr, start_line, end_line, function(result, err)
     -- Safely close the loading window
     pcall(function()
       if vim.api.nvim_win_is_valid(loading_win) then

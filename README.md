@@ -120,9 +120,16 @@ or
 
 ### Line Edit with Diff View
 
-Edit the current line with an interactive git-style diff view:
+Edit single or multiple lines with an interactive git-style diff view:
 
+**Single line:**
 ```
+<leader>cl
+```
+
+**Multiple lines (visual mode):**
+```
+V (select lines)
 <leader>cl
 ```
 
@@ -130,22 +137,24 @@ or
 
 ```
 :ClaudeLineEdit
+:'<,'>ClaudeLineEdit
 ```
 
 **How it works:**
-1. Place cursor on the line you want to edit
+1. Place cursor on a line, or select multiple lines with `V`
 2. Press `<leader>cl` to trigger analysis
 3. A diff window opens on the right showing:
    - `- original line` (in red)
    - `+ suggested line` (in green)
-4. **Edit normally** with all Neovim commands (`c`, `d`, `i`, etc.) to modify the `+` line
+   - Multiple edits shown with `@@ Line N @@` headers
+4. **Edit normally** with all Neovim commands (`c`, `d`, `i`, etc.) to modify the `+` lines
 5. Special commands:
    - `A`: **Accept** - apply the current `+` line to your file
    - `C`: **Cancel** - reject the change, keep original `-` line
    - `dd`: Delete current line (accepts the other)
    - `q`: Close diff window
 
-You can use normal Vim editing (`ciw`, `cw`, `A`, `I`, etc.) to modify Claude's suggestion, then press capital `A` to accept it.
+You can use normal Vim editing (`ciw`, `cw`, `A`, `I`, etc.) to modify Claude's suggestions, then press capital `A` to accept each change.
 
 **Example:**
 ```diff
