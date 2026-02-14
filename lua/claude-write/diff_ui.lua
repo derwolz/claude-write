@@ -31,7 +31,7 @@ function M.show_diff_window()
   vim.api.nvim_buf_set_option(M.diff_bufnr, "buftype", "nofile")
   vim.api.nvim_buf_set_option(M.diff_bufnr, "bufhidden", "hide")
   vim.api.nvim_buf_set_option(M.diff_bufnr, "swapfile", false)
-  vim.api.nvim_buf_set_option(M.diff_bufnr, "filetype", "diff")
+  vim.api.nvim_buf_set_option(M.diff_bufnr, "filetype", "claudediff")
   vim.api.nvim_buf_set_option(M.diff_bufnr, "modifiable", true)
 
   -- Set window options
@@ -141,19 +141,25 @@ end
 
 -- Apply syntax highlighting to diff buffer
 function M.apply_diff_syntax()
-  vim.api.nvim_buf_call(M.diff_bufnr, function()
-    vim.cmd([[
-      syntax clear
-      syntax match DiffComment "^#.*"
-      syntax match DiffLocation "^@@.*@@"
-      syntax match DiffRemove "^-.*"
-      syntax match DiffAdd "^\+.*"
+  if not M.diff_bufnr or not vim.api.nvim_buf_is_valid(M.diff_bufnr) then
+    return
+  end
 
-      highlight DiffComment ctermfg=cyan guifg=#56b6c2
-      highlight DiffLocation ctermfg=yellow guifg=#e5c07b
-      highlight DiffRemove ctermfg=red guifg=#e06c75
-      highlight DiffAdd ctermfg=green guifg=#98c379
-    ]])
+  vim.api.nvim_buf_call(M.diff_bufnr, function()
+    -- Clear any existing syntax
+    vim.cmd("syntax clear")
+
+    -- Define syntax matches
+    vim.cmd("syntax match ClaudeDiffComment '^#.*'")
+    vim.cmd("syntax match ClaudeDiffLocation '^@@.*@@'")
+    vim.cmd("syntax match ClaudeDiffRemove '^-.*'")
+    vim.cmd("syntax match ClaudeDiffAdd '^+.*'")
+
+    -- Define highlights
+    vim.cmd("highlight ClaudeDiffComment ctermfg=cyan guifg=#56b6c2")
+    vim.cmd("highlight ClaudeDiffLocation ctermfg=yellow guifg=#e5c07b")
+    vim.cmd("highlight ClaudeDiffRemove ctermfg=red guifg=#e06c75")
+    vim.cmd("highlight ClaudeDiffAdd ctermfg=green guifg=#98c379")
   end)
 end
 
