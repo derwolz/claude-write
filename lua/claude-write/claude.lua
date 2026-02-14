@@ -47,10 +47,16 @@ function M.execute_async(prompt, callback, opts)
   local stdout_data = {}
   local stderr_data = {}
 
-  local cmd = string.format("%s -p '%s'", config.options.claude_cmd, prompt:gsub("'", "'\\'''"))
-  debug_log("Starting command: " .. cmd)
+  -- Build command - use array form for better escaping
+  local cmd = { config.options.claude_cmd, "-p", prompt }
+  debug_log("Starting command: " .. table.concat(cmd, " "))
+
+  -- Get current environment and remove CLAUDECODE to allow nested sessions
+  local env = vim.fn.environ()
+  env.CLAUDECODE = vim.NIL
 
   local job_id = vim.fn.jobstart(cmd, {
+    env = env,
     stdout_buffered = true,
     stderr_buffered = true,
     on_stdout = function(_, data)
