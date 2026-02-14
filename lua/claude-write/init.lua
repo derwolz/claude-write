@@ -44,9 +44,7 @@ function M.setup(opts)
         desc = "Claude: Edit current line with diff view"
       })
       -- Visual mode: edit selected lines
-      vim.keymap.set("v", config.options.keymaps.line_edit, function()
-        M.line_edit_visual()
-      end, {
+      vim.keymap.set("v", config.options.keymaps.line_edit, ":<C-u>lua require('claude-write').line_edit_visual()<CR>", {
         noremap = true,
         silent = true,
         desc = "Claude: Edit selected lines with diff view"
