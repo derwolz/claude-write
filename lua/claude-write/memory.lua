@@ -12,7 +12,12 @@ M.memory = {
 
 -- Load memory from disk
 function M.load()
-  local file = io.open(config.options.memory_file, "r")
+  local memory_file = config.options.memory_file or config.defaults.memory_file
+  if not memory_file then
+    return M.memory
+  end
+
+  local file = io.open(memory_file, "r")
   if not file then
     return M.memory
   end
@@ -30,10 +35,16 @@ end
 
 -- Save memory to disk
 function M.save()
+  local memory_file = config.options.memory_file or config.defaults.memory_file
+  if not memory_file then
+    vim.notify("Memory file path not configured", vim.log.levels.ERROR)
+    return false
+  end
+
   M.memory.timestamp = os.time()
 
   local content = vim.json.encode(M.memory)
-  local file = io.open(config.options.memory_file, "w")
+  local file = io.open(memory_file, "w")
   if not file then
     vim.notify("Failed to save memory", vim.log.levels.ERROR)
     return false
