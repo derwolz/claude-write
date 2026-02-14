@@ -88,13 +88,26 @@ function M.copy_check()
     return
   end
 
+  vim.notify("Starting line check...", vim.log.levels.INFO)
   local loading_buf, loading_win = ui.show_loading("Checking line...")
 
   claude.check_line(line_content, function(result, err)
-    vim.api.nvim_win_close(loading_win, true)
+    -- Safely close the loading window
+    pcall(function()
+      if vim.api.nvim_win_is_valid(loading_win) then
+        vim.api.nvim_win_close(loading_win, true)
+      end
+    end)
 
     if err then
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
+      local log_file = vim.fn.stdpath("cache") .. "/claude-write-debug.log"
+      vim.notify("Check log file: " .. log_file, vim.log.levels.INFO)
+      return
+    end
+
+    if not result or result == "" then
+      vim.notify("No result received from Claude", vim.log.levels.WARN)
       return
     end
 
@@ -116,13 +129,27 @@ function M.line_edit(n)
     return
   end
 
+  vim.notify("Starting line edit...", vim.log.levels.INFO)
   local loading_buf, loading_win = ui.show_loading("Editing lines...")
 
   claude.edit_lines(lines, function(result, err)
-    vim.api.nvim_win_close(loading_win, true)
+    -- Safely close the loading window
+    pcall(function()
+      if vim.api.nvim_win_is_valid(loading_win) then
+        vim.api.nvim_win_close(loading_win, true)
+      end
+    end)
 
     if err then
-      vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
+      -- Also write to log file for debugging
+      local log_file = vim.fn.stdpath("cache") .. "/claude-write-debug.log"
+      vim.notify("Check log file: " .. log_file, vim.log.levels.INFO)
+      return
+    end
+
+    if not result or result == "" then
+      vim.notify("No result received from Claude", vim.log.levels.WARN)
       return
     end
 
