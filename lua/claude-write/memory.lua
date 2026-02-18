@@ -93,6 +93,18 @@ function M.clear()
   vim.notify("Memory cleared", vim.log.levels.INFO)
 end
 
+-- Get just the context notes (compact, no file blobs) for reader mode
+function M.get_reader_context()
+  if not next(M.memory.context) then
+    return ""
+  end
+  local parts = {}
+  for key, value in pairs(M.memory.context) do
+    table.insert(parts, key .. ": " .. value)
+  end
+  return table.concat(parts, "\n")
+end
+
 -- Get formatted context for Claude
 function M.get_context_string()
   local parts = {}

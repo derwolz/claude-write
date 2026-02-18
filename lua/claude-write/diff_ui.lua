@@ -7,8 +7,89 @@ M.diff_winnr = nil
 M.current_edits = {}
 M.source_bufnr = nil
 
+-- Store reader window state
+M.reader_bufnr = nil
+M.reader_winnr = nil
+
+-- Close the reader window
+function M.close_reader_window()
+  if M.reader_winnr and vim.api.nvim_win_is_valid(M.reader_winnr) then
+    vim.api.nvim_win_close(M.reader_winnr, true)
+  end
+  M.reader_winnr = nil
+end
+
+-- Show reader response in a right-side window, return focus to source_win
+function M.display_reader(source_win, title, response_text)
+  -- Close diff window if open
+  if M.diff_winnr and vim.api.nvim_win_is_valid(M.diff_winnr) then
+    vim.api.nvim_win_close(M.diff_winnr, true)
+    M.diff_winnr = nil
+    M.current_edits = {}
+  end
+
+  -- Reuse or create reader window
+  if not M.reader_winnr or not vim.api.nvim_win_is_valid(M.reader_winnr) then
+    -- Focus source window before splitting so split appears on the right of it
+    if source_win and vim.api.nvim_win_is_valid(source_win) then
+      vim.api.nvim_set_current_win(source_win)
+    end
+    vim.cmd("rightbelow vsplit")
+    M.reader_winnr = vim.api.nvim_get_current_win()
+  else
+    vim.api.nvim_set_current_win(M.reader_winnr)
+  end
+
+  if not M.reader_bufnr or not vim.api.nvim_buf_is_valid(M.reader_bufnr) then
+    M.reader_bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(M.reader_bufnr, "Claude Reader")
+  end
+
+  vim.api.nvim_win_set_buf(M.reader_winnr, M.reader_bufnr)
+  vim.api.nvim_buf_set_option(M.reader_bufnr, "buftype", "nofile")
+  vim.api.nvim_buf_set_option(M.reader_bufnr, "bufhidden", "hide")
+  vim.api.nvim_buf_set_option(M.reader_bufnr, "swapfile", false)
+  vim.api.nvim_win_set_option(M.reader_winnr, "number", false)
+  vim.api.nvim_win_set_option(M.reader_winnr, "relativenumber", false)
+  vim.api.nvim_win_set_option(M.reader_winnr, "wrap", true)
+  vim.api.nvim_win_set_option(M.reader_winnr, "linebreak", true)
+
+  -- Build content
+  local lines = { "# " .. title, "" }
+  for line in response_text:gmatch("[^\n]+") do
+    table.insert(lines, line)
+  end
+
+  vim.api.nvim_buf_set_option(M.reader_bufnr, "modifiable", true)
+  vim.api.nvim_buf_set_lines(M.reader_bufnr, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(M.reader_bufnr, "modifiable", false)
+
+  -- Syntax: just highlight the header
+  vim.api.nvim_buf_call(M.reader_bufnr, function()
+    vim.cmd("syntax clear")
+    vim.cmd("syntax match ClaudeReaderHeader '^#.*'")
+    vim.cmd("highlight ClaudeReaderHeader ctermfg=cyan guifg=#56b6c2")
+  end)
+
+  -- q to close
+  vim.keymap.set("n", "q", function()
+    M.close_reader_window()
+  end, { noremap = true, silent = true, buffer = M.reader_bufnr })
+
+  -- Return focus to source window
+  if source_win and vim.api.nvim_win_is_valid(source_win) then
+    vim.api.nvim_set_current_win(source_win)
+  end
+end
+
 -- Create or show the diff window on the right side
 function M.show_diff_window()
+  -- Close reader window if open
+  if M.reader_winnr and vim.api.nvim_win_is_valid(M.reader_winnr) then
+    vim.api.nvim_win_close(M.reader_winnr, true)
+    M.reader_winnr = nil
+  end
+
   -- If diff window already exists and is valid, just focus it
   if M.diff_winnr and vim.api.nvim_win_is_valid(M.diff_winnr) then
     vim.api.nvim_set_current_win(M.diff_winnr)

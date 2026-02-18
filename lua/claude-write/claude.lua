@@ -332,6 +332,58 @@ function M.edit_multiple_lines(bufnr, start_line, end_line, callback)
   call_claude_api(messages, callback)
 end
 
+-- Copy editor system prompt: grammar and spelling only
+local COPY_EDITOR_PROMPT = [[You are a copy editor reviewing a document for grammar and spelling errors ONLY.
+
+Your role:
+- Fix grammar errors (subject-verb agreement, tense, pronoun agreement, punctuation, etc.)
+- Fix spelling mistakes
+- Do NOT suggest stylistic rewrites, word choice changes, or restructuring for clarity
+- You MAY include a brief note (2-3 sentences MAX) in the explanation if a sentence is stylistically awkward, but do NOT change it in the edit
+- Preserve the author's voice and style completely
+
+The context will be provided with line numbers in the format: [Line N] text
+The line number N is the actual 0-indexed line number in the document.
+
+You MUST respond with valid JSON in the following format:
+{
+  "explanation": "Brief note on what was corrected. If awkward but grammatically correct, note it here in 2-3 sentences max.",
+  "edit": [
+    {"line": N, "text": "corrected text with only grammar/spelling fixes applied"}
+  ]
+}
+
+IMPORTANT: Use the EXACT line number from the [Line N] prefix in your JSON response.
+- If there are grammar/spelling errors: Include the corrected text in the "edit" array
+- If the line is grammatically correct and spelled correctly: Return an empty "edit" array: []
+- Do NOT change anything that is not a grammar or spelling error
+- The "explanation" should always be present, even if the edit array is empty
+
+Always respond with ONLY the JSON object, no additional text.]]
+
+-- Copy edit current line (grammar and spelling only) with diff view
+function M.copy_edit_line(bufnr, line_nr, callback)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)
+  if #lines == 0 then
+    callback(nil, "No line at position " .. line_nr)
+    return
+  end
+
+  local line_content = lines[1]
+  local zero_indexed_line = line_nr - 1
+
+  local user_prompt = string.format("[Line %d] %s", zero_indexed_line, line_content)
+
+  local messages = {
+    {
+      role = "user",
+      content = COPY_EDITOR_PROMPT .. "\n\nNow copy-edit this line:\n" .. user_prompt
+    }
+  }
+
+  call_claude_api(messages, callback)
+end
+
 -- Check current line for grammar/spelling
 function M.check_line(line_content, callback)
   local prompt = string.format(
@@ -340,6 +392,40 @@ function M.check_line(line_content, callback)
   )
 
   M.execute_async(prompt, callback)
+end
+
+-- Reader reaction system prompt
+local READER_PROMPT = [[You are a first-time reader encountering this passage cold. React honestly as a reader.
+
+Focus on: immediate impressions, what you understood or felt, anything that confused or pulled you in.
+Keep it compact: 2-4 sentences total. Do not give writing advice.
+
+If this passage reveals something memorable about a character, raises a strong question, or creates a notable effect worth tracking, include a brief memory note. Keep memory values under 20 words.
+
+Respond with valid JSON only:
+{
+  "response": "your 2-4 sentence reader reaction",
+  "memory": [{"key": "compact_key", "value": "compact note under 20 words"}]
+}
+
+The memory array may be empty [] if nothing warrants saving.
+Always respond with ONLY the JSON object, no additional text.]]
+
+-- Get a reader's reaction to a passage, with existing context
+function M.reader_react(text, context_string, callback)
+  local context_part = ""
+  if context_string and context_string ~= "" then
+    context_part = "\n\nExisting reader notes:\n" .. context_string .. "\n"
+  end
+
+  local messages = {
+    {
+      role = "user",
+      content = READER_PROMPT .. context_part .. "\n\nPassage:\n" .. text
+    }
+  }
+
+  call_claude_api(messages, callback)
 end
 
 -- Edit last N lines

@@ -14,8 +14,9 @@ M.defaults = {
   -- Keybindings
   keymaps = {
     reader = "<leader>cr",        -- Load into memory
-    copy_check = "<leader>cc",    -- Check current line
+    copy_check = "<leader>cc",    -- Copy-edit current line (grammar/spelling diff)
     line_edit = "<leader>cl",     -- Edit current line with diff view
+    reader_check = "<leader>cs",  -- Reader reaction to current line/selection
     git_browse = "<leader>cg",    -- Browse git repo
     clear_memory = "<leader>cR",  -- Clear memory (capital R)
   },

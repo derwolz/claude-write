@@ -15,6 +15,7 @@ function M.setup(opts)
   vim.api.nvim_create_user_command("ClaudeReader", M.reader, {})
   vim.api.nvim_create_user_command("ClaudeCopyCheck", M.copy_check, {})
   vim.api.nvim_create_user_command("ClaudeLineEdit", M.line_edit, { range = true })
+  vim.api.nvim_create_user_command("ClaudeReaderCheck", M.reader_check, {})
   vim.api.nvim_create_user_command("ClaudeGitBrowse", M.git_browse, {})
   vim.api.nvim_create_user_command("ClaudeClearMemory", M.clear_memory, {})
 
@@ -48,6 +49,19 @@ function M.setup(opts)
         noremap = true,
         silent = true,
         desc = "Claude: Edit selected lines with diff view"
+      })
+    end
+
+    if config.options.keymaps.reader_check then
+      vim.keymap.set("n", config.options.keymaps.reader_check, M.reader_check, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Reader reaction to current line"
+      })
+      vim.keymap.set("v", config.options.keymaps.reader_check, ":<C-u>lua require('claude-write').reader_check_visual()<CR>", {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Reader reaction to selected lines"
       })
     end
 
@@ -86,9 +100,10 @@ function M.reader()
   vim.notify("Added to memory: " .. vim.fn.fnamemodify(filepath, ":t"), vim.log.levels.INFO)
 end
 
--- Check current line for issues
+-- Copy-edit current line: grammar and spelling only, with diff view
 function M.copy_check()
-  local line_num = vim.api.nvim_win_get_cursor(0)[1]
+  local bufnr = vim.api.nvim_get_current_buf()
+  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
   local line_content = vim.api.nvim_get_current_line()
 
   if line_content == "" then
@@ -96,11 +111,10 @@ function M.copy_check()
     return
   end
 
-  vim.notify("Starting line check...", vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Checking line...")
+  vim.notify("Copy-editing line " .. line_nr .. "...", vim.log.levels.INFO)
+  local loading_buf, loading_win = ui.show_loading("Checking grammar and spelling...")
 
-  claude.check_line(line_content, function(result, err)
-    -- Safely close the loading window
+  claude.copy_edit_line(bufnr, line_nr, function(result, err)
     pcall(function()
       if vim.api.nvim_win_is_valid(loading_win) then
         vim.api.nvim_win_close(loading_win, true)
@@ -119,7 +133,14 @@ function M.copy_check()
       return
     end
 
-    ui.show_result("Line Check - Line " .. line_num, result)
+    local edit_data, parse_err = diff_ui.parse_edit_response(result)
+    if parse_err then
+      vim.notify("Failed to parse response: " .. parse_err, vim.log.levels.ERROR)
+      ui.show_result("Raw Response (Debug)", result)
+      return
+    end
+
+    diff_ui.display_diff(bufnr, edit_data)
   end)
 end
 
@@ -211,6 +232,127 @@ function M.line_edit_visual()
 
     -- Display the diff
     diff_ui.display_diff(bufnr, edit_data)
+  end)
+end
+
+-- Parse reader JSON response (shared by both reader functions)
+local function parse_reader_response(raw)
+  local json_str = raw:match("```json\n(.-)```") or raw:match("```\n(.-)```") or raw
+  local ok, data = pcall(vim.json.decode, json_str)
+  if not ok or not data or not data.response then
+    return nil, "Failed to parse reader response"
+  end
+  return data, nil
+end
+
+-- Reader reaction to current line
+function M.reader_check()
+  local source_win = vim.api.nvim_get_current_win()
+  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
+  local line_content = vim.api.nvim_get_current_line()
+
+  if line_content == "" then
+    vim.notify("Current line is empty", vim.log.levels.WARN)
+    return
+  end
+
+  vim.notify("Getting reader reaction...", vim.log.levels.INFO)
+  local loading_buf, loading_win = ui.show_loading("Reading...")
+
+  local context_string = memory.get_reader_context()
+
+  claude.reader_react(line_content, context_string, function(result, err)
+    pcall(function()
+      if vim.api.nvim_win_is_valid(loading_win) then
+        vim.api.nvim_win_close(loading_win, true)
+      end
+    end)
+
+    if err then
+      vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
+      return
+    end
+
+    if not result or result == "" then
+      vim.notify("No result received from Claude", vim.log.levels.WARN)
+      return
+    end
+
+    local data, parse_err = parse_reader_response(result)
+    if parse_err then
+      vim.notify(parse_err, vim.log.levels.ERROR)
+      return
+    end
+
+    if data.memory and #data.memory > 0 then
+      for _, item in ipairs(data.memory) do
+        if item.key and item.value then
+          memory.add_context(item.key, item.value)
+        end
+      end
+    end
+
+    diff_ui.display_reader(source_win, "Reader — Line " .. line_nr, data.response)
+  end)
+end
+
+-- Reader reaction to visual selection
+function M.reader_check_visual()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local source_win = vim.api.nvim_get_current_win()
+
+  local start_line = vim.fn.line("'<")
+  local end_line = vim.fn.line("'>")
+
+  vim.cmd("normal! \\<Esc>")
+
+  local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
+  if #lines == 0 then
+    vim.notify("No lines selected", vim.log.levels.WARN)
+    return
+  end
+
+  local text = table.concat(lines, "\n")
+  local line_count = end_line - start_line + 1
+
+  vim.notify(string.format("Getting reader reaction for %d lines...", line_count), vim.log.levels.INFO)
+  local loading_buf, loading_win = ui.show_loading("Reading...")
+
+  local context_string = memory.get_reader_context()
+
+  claude.reader_react(text, context_string, function(result, err)
+    pcall(function()
+      if vim.api.nvim_win_is_valid(loading_win) then
+        vim.api.nvim_win_close(loading_win, true)
+      end
+    end)
+
+    if err then
+      vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
+      return
+    end
+
+    if not result or result == "" then
+      vim.notify("No result received from Claude", vim.log.levels.WARN)
+      return
+    end
+
+    local data, parse_err = parse_reader_response(result)
+    if parse_err then
+      vim.notify(parse_err, vim.log.levels.ERROR)
+      return
+    end
+
+    if data.memory and #data.memory > 0 then
+      for _, item in ipairs(data.memory) do
+        if item.key and item.value then
+          memory.add_context(item.key, item.value)
+        end
+      end
+    end
+
+    local title = string.format("Reader — Lines %d-%d", start_line, end_line)
+    diff_ui.display_reader(source_win, title, data.response)
   end)
 end
 
