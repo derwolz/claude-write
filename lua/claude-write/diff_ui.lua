@@ -196,7 +196,10 @@ function M.display_diff(source_bufnr, edit_data)
   table.insert(lines, "")
 
   if #M.current_edits == 0 then
-    table.insert(lines, "No changes suggested - line is good as-is!")
+    -- Don't open a diff window just to say nothing changed
+    vim.notify(edit_data.explanation, vim.log.levels.INFO)
+    M.close_diff_window()
+    return
   else
     for _, edit in ipairs(M.current_edits) do
       -- Get original line from source buffer (edit.line is 0-indexed)
