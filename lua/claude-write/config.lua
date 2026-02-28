@@ -23,6 +23,7 @@ M.defaults = {
     git_browse = "<leader>cg",    -- Browse git repo
     clear_memory = "<leader>cR",  -- Clear memory (capital R)
     load_chapter = "<leader>cC",  -- Load chapters up to N
+    write_config = "<leader>cG",  -- Configure chapter directory
   },
 
   -- UI settings

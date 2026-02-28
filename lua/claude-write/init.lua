@@ -96,6 +96,14 @@ function M.setup(opts)
         desc = "Claude: Load chapters up to N"
       })
     end
+
+    if config.options.keymaps.write_config then
+      vim.keymap.set("n", config.options.keymaps.write_config, M.write_config, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Set chapter directory"
+      })
+    end
   end
 end
 
