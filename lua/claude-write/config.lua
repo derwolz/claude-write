@@ -8,6 +8,9 @@ M.defaults = {
   -- Memory file for persistent context
   memory_file = vim.fn.stdpath("cache") .. "/claude-write/memory.json",
 
+  -- Chapter summaries folder
+  chapter_dir = nil,
+
   -- Default git branch to checkout
   default_branch = "main",
 
@@ -19,6 +22,7 @@ M.defaults = {
     reader_check = "<leader>cs",  -- Reader reaction to current line/selection
     git_browse = "<leader>cg",    -- Browse git repo
     clear_memory = "<leader>cR",  -- Clear memory (capital R)
+    load_chapter = "<leader>cC",  -- Load chapters up to N
   },
 
   -- UI settings
