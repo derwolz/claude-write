@@ -112,14 +112,8 @@ function M.copy_check()
   end
 
   vim.notify("Copy-editing line " .. line_nr .. "...", vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Checking grammar and spelling...")
 
   claude.copy_edit_line(bufnr, line_nr, function(result, err)
-    pcall(function()
-      if vim.api.nvim_win_is_valid(loading_win) then
-        vim.api.nvim_win_close(loading_win, true)
-      end
-    end)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
@@ -150,15 +144,8 @@ function M.line_edit()
   local line_nr = vim.api.nvim_win_get_cursor(0)[1]
 
   vim.notify("Analyzing line " .. line_nr .. "...", vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Claude is analyzing...")
 
   claude.edit_current_line(bufnr, line_nr, function(result, err)
-    -- Safely close the loading window
-    pcall(function()
-      if vim.api.nvim_win_is_valid(loading_win) then
-        vim.api.nvim_win_close(loading_win, true)
-      end
-    end)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
@@ -199,15 +186,8 @@ function M.line_edit_visual()
 
   local line_count = end_line - start_line + 1
   vim.notify(string.format("Analyzing %d lines (%d-%d)...", line_count, start_line, end_line), vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Claude is analyzing " .. line_count .. " lines...")
 
   claude.edit_multiple_lines(bufnr, start_line, end_line, function(result, err)
-    -- Safely close the loading window
-    pcall(function()
-      if vim.api.nvim_win_is_valid(loading_win) then
-        vim.api.nvim_win_close(loading_win, true)
-      end
-    end)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
@@ -257,16 +237,10 @@ function M.reader_check()
   end
 
   vim.notify("Getting reader reaction...", vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Reading...")
 
   local context_string = memory.get_reader_context()
 
   claude.reader_react(line_content, context_string, function(result, err)
-    pcall(function()
-      if vim.api.nvim_win_is_valid(loading_win) then
-        vim.api.nvim_win_close(loading_win, true)
-      end
-    end)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)
@@ -316,16 +290,10 @@ function M.reader_check_visual()
   local line_count = end_line - start_line + 1
 
   vim.notify(string.format("Getting reader reaction for %d lines...", line_count), vim.log.levels.INFO)
-  local loading_buf, loading_win = ui.show_loading("Reading...")
 
   local context_string = memory.get_reader_context()
 
   claude.reader_react(text, context_string, function(result, err)
-    pcall(function()
-      if vim.api.nvim_win_is_valid(loading_win) then
-        vim.api.nvim_win_close(loading_win, true)
-      end
-    end)
 
     if err then
       vim.notify("Claude Error: " .. err, vim.log.levels.ERROR)

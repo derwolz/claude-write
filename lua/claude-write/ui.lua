@@ -183,22 +183,5 @@ function M.show_result(title, content)
   end, { noremap = true, silent = true, buffer = buf })
 end
 
--- Show loading indicator
-function M.show_loading(message)
-  local buf, win = M.create_float({ width = 50, height = 5 })
-
-  local lines = {
-    "╔════════════════════════════════════════════════╗",
-    "║                                                ║",
-    "║  " .. message .. string.rep(" ", 46 - #message) .. "║",
-    "║                                                ║",
-    "╚════════════════════════════════════════════════╝",
-  }
-
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
-
-  return buf, win
-end
 
 return M
