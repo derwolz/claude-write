@@ -7,6 +7,9 @@ A Neovim plugin that uses Claude's API directly for intelligent code editing and
 - **Reader Mode** (`<leader>cr`): Load current buffer into persistent memory
 - **Copy Check** (`<leader>cc`): Check current line for grammar/spelling/clarity
 - **Line Edit** (`<leader>cl`): Edit current line with interactive diff view
+- **Reader Check** (`<leader>cs`): Get a reader's reaction to current line/selection
+- **Load Chapter** (`<leader>cC`): Load chapter summaries 1-N into memory for context
+- **Configure** (`<leader>cG`): Set chapter summaries folder
 - **Git Browse** (`<leader>cg`): Browse and load files from git repositories
 - **Clear Memory** (`<leader>cR`): Clear all stored context
 
@@ -31,6 +34,9 @@ A Neovim plugin that uses Claude's API directly for intelligent code editing and
         reader = "<leader>cr",
         copy_check = "<leader>cc",
         line_edit = "<leader>cl",
+        reader_check = "<leader>cs",
+        load_chapter = "<leader>cC",
+        write_config = "<leader>cG",
         git_browse = "<leader>cg",
         clear_memory = "<leader>cR",
       },
@@ -69,9 +75,15 @@ require("claude-write").setup({
     reader = "<leader>cr",
     copy_check = "<leader>cc",
     line_edit = "<leader>cl",
+    reader_check = "<leader>cs",
+    load_chapter = "<leader>cC",
+    write_config = "<leader>cG",
     git_browse = "<leader>cg",
     clear_memory = "<leader>cR",
   },
+
+  -- Chapter summaries folder (set via :ClaudeWriteConfig or <leader>cG)
+  chapter_dir = nil,
 
   -- UI settings
   ui = {
@@ -84,6 +96,13 @@ require("claude-write").setup({
   session = {
     timeout = 300000,  -- 5 minutes
     max_retries = 3,
+  },
+
+  -- Custom system prompts (override any or all)
+  prompts = {
+    line_editor = "Your custom line editor prompt...",
+    copy_editor = "Your custom copy editor prompt...",
+    reader = "Your custom reader prompt...",
   },
 })
 ```
@@ -167,6 +186,46 @@ You can use normal Vim editing (`ciw`, `cw`, `A`, `I`, etc.) to modify Claude's 
 
 Delete the `-` line to accept Claude's suggestion, or delete the `+` line to keep your original.
 
+### Load Chapter Summaries
+
+Load chapter summary files into memory for context when editing. This replaces all existing memory with chapter content.
+
+1. First, set your chapter summaries folder:
+```
+<leader>cG
+```
+or `:ClaudeWriteConfig`
+
+2. Then load chapters 1 through N:
+```
+<leader>cC
+```
+or `:ClaudeWriteChapter 10` (loads chapters 1-10)
+
+**Chapter detection** (checks in order):
+- Filename contains "prologue" or "epilogue"
+- First line starts with "Prologue" or "Epilogue"
+- First line starts with "Chapter XX"
+- Number in the filename (e.g., `05_summary.txt`)
+
+Prologue (if found) is always included. Each file's full content is loaded into memory.
+
+### Reader Check
+
+Get a first-time reader's reaction to the current line or selection:
+
+```
+<leader>cs
+```
+
+or in visual mode:
+```
+V (select lines)
+<leader>cs
+```
+
+or `:ClaudeReaderCheck`
+
 ### Git Repository Browser
 
 1. Press `<leader>cg` or run `:ClaudeGitBrowse`
@@ -212,9 +271,12 @@ The plugin uses OAuth credentials from `~/.claude/.credentials.json` to make dir
 Context is stored in `~/.cache/nvim/claude-write/memory.json` and includes:
 
 - Loaded file contents
+- Chapter summaries (loaded via `:ClaudeWriteChapter`)
 - Selected files from git repositories
-- Custom context items
+- Reader context notes
 - Timestamps for all entries
+
+Note: Loading chapters with `:ClaudeWriteChapter` overwrites all existing memory with the chapter data.
 
 ## License
 

@@ -93,6 +93,127 @@ function M.clear()
   vim.notify("Memory cleared", vim.log.levels.INFO)
 end
 
+-- Detect chapter number from a file: check first line for "chapter XX", then filename for numbers
+-- Also detects "prologue" (chapter 0) and "epilogue" (returns -1 as sentinel)
+local function detect_chapter_info(filepath)
+  local filename = vim.fn.fnamemodify(filepath, ":t"):lower()
+
+  -- Check for prologue/epilogue in filename
+  if filename:match("prologue") then
+    return 0, "prologue"
+  end
+  if filename:match("epilogue") then
+    return -1, "epilogue"
+  end
+
+  local f = io.open(filepath, "r")
+  if not f then return nil, nil end
+
+  local first_line = f:read("*l") or ""
+  f:close()
+
+  local first_lower = first_line:lower()
+
+  -- Check first line for prologue/epilogue
+  if first_lower:match("^prologue") then
+    return 0, "prologue"
+  end
+  if first_lower:match("^epilogue") then
+    return -1, "epilogue"
+  end
+
+  -- Check first line for "chapter XX"
+  local num = first_lower:match("^chapter%s+(%d+)")
+  if num then return tonumber(num), "chapter" end
+
+  -- Fall back to numbers in filename
+  num = filename:match("(%d+)")
+  if num then return tonumber(num), "chapter" end
+
+  return nil, nil
+end
+
+-- Load chapter summaries from chapter_dir up to chapter N, replacing all memory
+-- Prologue (chapter 0) is always included if present.
+-- Epilogue is only included if up_to_chapter is nil (load all).
+function M.load_chapters(up_to_chapter)
+  local chapter_dir = config.options.chapter_dir
+  if not chapter_dir then
+    return nil, "No chapter_dir configured. Use :ClaudeWriteConfig to set it."
+  end
+
+  chapter_dir = vim.fn.expand(chapter_dir)
+  if vim.fn.isdirectory(chapter_dir) == 0 then
+    return nil, "Chapter directory does not exist: " .. chapter_dir
+  end
+
+  local files = vim.fn.glob(chapter_dir .. "/*", false, true)
+  local chapters = {}    -- num -> { filepath, content }
+  local has_epilogue = false
+  local epilogue_data = nil
+
+  for _, filepath in ipairs(files) do
+    if vim.fn.filereadable(filepath) == 1 then
+      local chapter_num, kind = detect_chapter_info(filepath)
+      if chapter_num then
+        local f = io.open(filepath, "r")
+        if f then
+          local content = f:read("*a")
+          f:close()
+
+          if kind == "epilogue" then
+            has_epilogue = true
+            epilogue_data = { filepath = filepath, content = content }
+          elseif chapter_num <= up_to_chapter then
+            chapters[chapter_num] = {
+              filepath = filepath,
+              content = content,
+            }
+          end
+        end
+      end
+    end
+  end
+
+  if not next(chapters) and not has_epilogue then
+    return nil, "No chapter files found in " .. chapter_dir
+  end
+
+  -- Clear memory and replace with chapters
+  M.memory = {
+    files = {},
+    git_repos = {},
+    context = {},
+    timestamp = os.time(),
+  }
+
+  local loaded = {}
+
+  -- Load prologue first if present (chapter 0)
+  if chapters[0] then
+    M.memory.files["prologue"] = {
+      content = chapters[0].content,
+      timestamp = os.time(),
+    }
+    table.insert(loaded, "prologue")
+  end
+
+  -- Load chapters in order
+  for num = 1, up_to_chapter do
+    if chapters[num] then
+      local key = string.format("chapter_%02d", num)
+      M.memory.files[key] = {
+        content = chapters[num].content,
+        timestamp = os.time(),
+      }
+      table.insert(loaded, num)
+    end
+  end
+
+  M.save()
+  return loaded, nil
+end
+
 -- Get just the context notes (compact, no file blobs) for reader mode
 function M.get_reader_context()
   if not next(M.memory.context) then

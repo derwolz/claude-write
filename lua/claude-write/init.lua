@@ -18,6 +18,10 @@ function M.setup(opts)
   vim.api.nvim_create_user_command("ClaudeReaderCheck", M.reader_check, {})
   vim.api.nvim_create_user_command("ClaudeGitBrowse", M.git_browse, {})
   vim.api.nvim_create_user_command("ClaudeClearMemory", M.clear_memory, {})
+  vim.api.nvim_create_user_command("ClaudeWriteChapter", function(cmd_opts)
+    M.load_chapter(cmd_opts.args)
+  end, { nargs = 1 })
+  vim.api.nvim_create_user_command("ClaudeWriteConfig", M.write_config, {})
 
   -- Set up keymaps if enabled
   if config.options.keymaps then
@@ -78,6 +82,26 @@ function M.setup(opts)
         noremap = true,
         silent = true,
         desc = "Claude: Clear all memory"
+      })
+    end
+
+    if config.options.keymaps.load_chapter then
+      vim.keymap.set("n", config.options.keymaps.load_chapter, function()
+        vim.ui.input({ prompt = "Load chapters up to: " }, function(input)
+          if input then M.load_chapter(input) end
+        end)
+      end, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Load chapters up to N"
+      })
+    end
+
+    if config.options.keymaps.write_config then
+      vim.keymap.set("n", config.options.keymaps.write_config, M.write_config, {
+        noremap = true,
+        silent = true,
+        desc = "Claude: Set chapter directory"
       })
     end
   end
@@ -321,6 +345,46 @@ function M.reader_check_visual()
 
     local title = string.format("Reader — Lines %d-%d", start_line, end_line)
     diff_ui.display_reader(source_win, title, data.response)
+  end)
+end
+
+-- Load chapters up to N into memory
+function M.load_chapter(input)
+  local chapter_num = tonumber(input)
+  if not chapter_num then
+    vim.notify("Invalid chapter number: " .. tostring(input), vim.log.levels.ERROR)
+    return
+  end
+
+  local loaded, err = memory.load_chapters(chapter_num)
+  if err then
+    vim.notify(err, vim.log.levels.ERROR)
+    return
+  end
+
+  -- Format loaded list for display
+  local parts = {}
+  for _, v in ipairs(loaded) do
+    if type(v) == "string" then
+      table.insert(parts, v)
+    else
+      table.insert(parts, tostring(v))
+    end
+  end
+  vim.notify("Loaded chapters: " .. table.concat(parts, ", "), vim.log.levels.INFO)
+end
+
+-- Configure claude-write settings interactively
+function M.write_config()
+  vim.ui.input({
+    prompt = "Chapter summaries folder: ",
+    default = config.options.chapter_dir or "",
+    completion = "dir",
+  }, function(input)
+    if input and input ~= "" then
+      config.options.chapter_dir = input
+      vim.notify("Chapter directory set to: " .. input, vim.log.levels.INFO)
+    end
   end)
 end
 
