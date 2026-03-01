@@ -84,34 +84,10 @@ function M.execute_async(prompt, callback, opts)
   call_claude_cli("", prompt, callback)
 end
 
--- Line editor system prompt
-local LINE_EDITOR_PROMPT = [[You are a line editor reviewing a document for stylistic improvements.
-
-Your role:
-- Review the current line for word choice, sentence length, flow, and redundancy
-- Provide ONE concrete suggestion per line, or respond with no changes if the line is excellent
-- Focus on clarity, conciseness, and impact
-- Suggest alternatives that maintain the author's voice
-- Be specific and actionable
-
-The context will be provided with line numbers in the format: [Line N] text
-The line number N is the actual 0-indexed line number in the document.
-
-You MUST respond with valid JSON in the following format:
-{
-  "explanation": "Brief explanation of your reasoning (1-2 sentences)",
-  "edit": [
-    {"line": N, "text": "suggested replacement text"}
-  ]
-}
-
-IMPORTANT: Use the EXACT line number from the [Line N] prefix in your JSON response.
-- If suggesting a change: Include the line number (from [Line N]) and new text in the "edit" array
-- If the line is good as-is: Return an empty "edit" array: []
-- The "line" field MUST match the line number from the [Line N] prefix
-- The "explanation" should always be present, even if the edit array is empty
-
-Always respond with ONLY the JSON object, no additional text.]]
+-- Get system prompts from config (allows user customization)
+local function get_prompt(name)
+  return config.options.prompts[name]
+end
 
 -- Edit current line with line editor mode
 function M.edit_current_line(bufnr, line_nr, callback)
@@ -126,7 +102,7 @@ function M.edit_current_line(bufnr, line_nr, callback)
   local zero_indexed_line = line_nr - 1
 
   local user_input = string.format("[Line %d] %s", zero_indexed_line, line_content)
-  local prompt = LINE_EDITOR_PROMPT .. "\n\nNow review this line:"
+  local prompt = get_prompt("line_editor") .. "\n\nNow review this line:"
 
   call_claude_cli(user_input, prompt, callback)
 end
@@ -148,39 +124,10 @@ function M.edit_multiple_lines(bufnr, start_line, end_line, callback)
   end
 
   local user_input = table.concat(line_prompts, "\n")
-  local prompt = LINE_EDITOR_PROMPT .. "\n\nNow review these lines:"
+  local prompt = get_prompt("line_editor") .. "\n\nNow review these lines:"
 
   call_claude_cli(user_input, prompt, callback)
 end
-
--- Copy editor system prompt: grammar and spelling only
-local COPY_EDITOR_PROMPT = [[You are a copy editor reviewing a document for grammar and spelling errors ONLY.
-
-Your role:
-- Fix grammar errors (subject-verb agreement, tense, pronoun agreement, punctuation, etc.)
-- Fix spelling mistakes
-- Do NOT suggest stylistic rewrites, word choice changes, or restructuring for clarity
-- You MAY include a brief note (2-3 sentences MAX) in the explanation if a sentence is stylistically awkward, but do NOT change it in the edit
-- Preserve the author's voice and style completely
-
-The context will be provided with line numbers in the format: [Line N] text
-The line number N is the actual 0-indexed line number in the document.
-
-You MUST respond with valid JSON in the following format:
-{
-  "explanation": "Brief note on what was corrected. If awkward but grammatically correct, note it here in 2-3 sentences max.",
-  "edit": [
-    {"line": N, "text": "corrected text with only grammar/spelling fixes applied"}
-  ]
-}
-
-IMPORTANT: Use the EXACT line number from the [Line N] prefix in your JSON response.
-- If there are grammar/spelling errors: Include the corrected text in the "edit" array
-- If the line is grammatically correct and spelled correctly: Return an empty "edit" array: []
-- Do NOT change anything that is not a grammar or spelling error
-- The "explanation" should always be present, even if the edit array is empty
-
-Always respond with ONLY the JSON object, no additional text.]]
 
 -- Copy edit current line (grammar and spelling only) with diff view
 function M.copy_edit_line(bufnr, line_nr, callback)
@@ -194,7 +141,7 @@ function M.copy_edit_line(bufnr, line_nr, callback)
   local zero_indexed_line = line_nr - 1
 
   local user_input = string.format("[Line %d] %s", zero_indexed_line, line_content)
-  local prompt = COPY_EDITOR_PROMPT .. "\n\nNow copy-edit this line:"
+  local prompt = get_prompt("copy_editor") .. "\n\nNow copy-edit this line:"
 
   call_claude_cli(user_input, prompt, callback)
 end
@@ -205,23 +152,6 @@ function M.check_line(line_content, callback)
   call_claude_cli(line_content, prompt, callback)
 end
 
--- Reader reaction system prompt
-local READER_PROMPT = [[You are a first-time reader encountering this passage cold. React honestly as a reader.
-
-Focus on: immediate impressions, what you understood or felt, anything that confused or pulled you in.
-Keep it compact: 2-4 sentences total. Do not give writing advice.
-
-If this passage reveals something memorable about a character, raises a strong question, or creates a notable effect worth tracking, include a brief memory note. Keep memory values under 20 words.
-
-Respond with valid JSON only:
-{
-  "response": "your 2-4 sentence reader reaction",
-  "memory": [{"key": "compact_key", "value": "compact note under 20 words"}]
-}
-
-The memory array may be empty [] if nothing warrants saving.
-Always respond with ONLY the JSON object, no additional text.]]
-
 -- Get a reader's reaction to a passage, with existing context
 function M.reader_react(text, context_string, callback)
   local context_part = ""
@@ -229,7 +159,7 @@ function M.reader_react(text, context_string, callback)
     context_part = "\n\nExisting reader notes:\n" .. context_string .. "\n"
   end
 
-  local prompt = READER_PROMPT .. context_part .. "\n\nPassage:"
+  local prompt = get_prompt("reader") .. context_part .. "\n\nPassage:"
 
   call_claude_cli(text, prompt, callback)
 end

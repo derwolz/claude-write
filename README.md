@@ -97,6 +97,13 @@ require("claude-write").setup({
     timeout = 300000,  -- 5 minutes
     max_retries = 3,
   },
+
+  -- Custom system prompts (override any or all)
+  prompts = {
+    line_editor = "Your custom line editor prompt...",
+    copy_editor = "Your custom copy editor prompt...",
+    reader = "Your custom reader prompt...",
+  },
 })
 ```
 
